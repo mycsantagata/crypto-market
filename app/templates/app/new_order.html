@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New Order</title>
+</head>
+<body>
+
+<h3>New Order</h3>
+<br/>
+<p style="font-weight:bold">You have: {{ quantity }} BTC</p>
+<p style="font-weight:bold">Actual price: ${{ price }}</p>
+<br/>
+
+<form action="{% url 'new_order'%}" method="POST">
+    {% csrf_token %}
+  <table>
+    {{ form.as_table }}
+  </table>
+    <br/>
+  <input type="submit" value="Submit">
+</form>
+
+</body>
+</html>
