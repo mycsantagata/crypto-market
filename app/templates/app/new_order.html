@@ -21,5 +21,12 @@
   <input type="submit" value="Submit">
 </form>
 
+{% if messages %}
+    {% for message in messages %}
+        <p style="color:red">{{ message }}</p>
+    {% endfor %}
+    <br/>
+{% endif %}
+
 </body>
 </html>

@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <title>Sign up</title>
 </head>
 <body>
-<h3>LOGIN</h3>
+
+<h3>SIGN UP</h3>
 <form action="" method="POST">
     {% csrf_token %}
   <table>
@@ -14,8 +15,6 @@
     <br/>
   <input type="submit" value="Submit">
 </form>
-<br/>
-<a href="{% url 'sign_up'%}">Sign up</a>
 
 {% if messages %}
     {% for message in messages %}
