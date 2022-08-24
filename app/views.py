@@ -4,12 +4,10 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.serializers.json import DjangoJSONEncoder
 from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models import Sum
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from .forms import OrderForm
 from .models import Profile, Order
-from .dataCMC import CMC
-
-getCMCData = CMC()
 
 
 def check_login(request):
@@ -76,14 +74,13 @@ def home(request):
 def new_order(request):
     user = request.user
     profile = get_object_or_404(Profile, user__username=user.username)
-    price = round(getCMCData.getBTCPrice(), 2)
+
     if request.method == "POST":
         form = OrderForm(request.POST)
         if form.is_valid():
-
             quantity = form.cleaned_data['quantity']
-            if 0 < quantity <= profile.btc:
-
+            price = form.cleaned_data['price']
+            if 0 < quantity <= profile.btc and price > 0:
                 type_order = form.cleaned_data['type']
                 order = Order()
                 order.profile = profile
@@ -100,8 +97,11 @@ def new_order(request):
                     if buy_order is None:
                         order.status = 1
                     else:
+                        total_earning = round((buy_order.price*quantity) - (order.price*quantity), 2)
                         buy_order.status = 2
+                        buy_order.earning = -buy_order.price
                         buy_order.save()
+                        order.earning = total_earning
                         order.status = 2
                     order.save()
 
@@ -110,15 +110,18 @@ def new_order(request):
 
                 else:
                     sell_order = Order.objects.filter(type=2, price__lt=price, quantity=quantity, status=1) \
-                        .order_by('datetime') \
+                        .order_by('-datetime') \
                         .order_by('price') \
                         .first()
 
                     if sell_order is None:
                         order.status = 1
                     else:
+                        total_earning = round((order.price * quantity) - (sell_order.price * quantity), 2)
                         sell_order.status = 2
+                        sell_order.earning = total_earning
                         sell_order.save()
+                        order.earning = -order.price
                         order.status = 2
                     order.save()
 
@@ -127,15 +130,14 @@ def new_order(request):
 
                 return redirect('home')
             else:
-                messages.success(request, '[Quantity]: invalid value! You do not have enough BTC or you have entered '
+                messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
                                           'a value less than 1')
                 return redirect('new_order')
     else:
 
         form = OrderForm()
         return render(request, 'app/new_order.html', {'form': form,
-                                                      'quantity': profile.btc,
-                                                      'price': price})
+                                                      'quantity': profile.btc})
 
 
 @login_required(login_url='/login/')
@@ -166,3 +168,21 @@ def get_active_orders(request):
     json_order['sell'] = sell
     json_pretty = json.dumps(json_order, cls=DjangoJSONEncoder, indent=4)
     return render(request, 'app/get_orders.html', {'orders': json_pretty})
+
+
+def get_earnings(request):
+    earnings = []
+    orders_per_user = Order.objects.filter(status=2).values('profile__user__username') \
+        .annotate(total_earning=Sum('earning'))
+    n = 1
+    for user in orders_per_user:
+        print(user["total_earning"])
+        json_user_earning = {
+            '#': n,
+            'user': user['profile__user__username'],
+            'total_earning': f'${user["total_earning"]}'
+        }
+        n += 1
+        earnings.append(json_user_earning)
+    json_pretty = json.dumps(earnings, indent=4)
+    return render(request, 'app/get_earnings.html', {'earnings': json_pretty})

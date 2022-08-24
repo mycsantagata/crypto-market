@@ -17,6 +17,7 @@ class Order(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     datetime = models.DateTimeField(default=timezone.now())
     type = models.IntegerField(choices=ORDER_TYPE, null=True)
-    price = models.CharField(max_length=200, null=True)
+    price = models.FloatField(null=True)
     quantity = models.FloatField(null=True)
     status = models.IntegerField(choices=STATUS_TYPE, null=True)
+    earning = models.FloatField(null=True)
