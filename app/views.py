@@ -110,7 +110,7 @@ def new_order(request):
                     order.save()
 
                     profile.dollar += price*quantity
-                    profile.btc += quantity
+                    profile.btc -= quantity
                     profile.save()
                 else:
                     messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
@@ -143,13 +143,13 @@ def new_order(request):
                     order.save()
 
                     profile.dollar -= price*quantity
-                    profile.btc -= quantity
+                    profile.btc += quantity
                     profile.save()
                 else:
                     messages.success(request, 'Invalid value! You do not have enough Dollars or you have entered '
                                               'a value less than 1')
                     return redirect('new_order')
-                return redirect('home')
+            return redirect('home')
 
 
     else:
