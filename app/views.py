@@ -100,17 +100,16 @@ def new_order(request):
                         buy_order.status = 2
                         buy_order.save()
 
-                        total_earning = round((buy_order.price * quantity) - (order.price * quantity), 2)
-                        profile.earning += total_earning
+                        profile.earning += order.price*quantity
                         buy_profile = get_object_or_404(Profile, user=buy_order.profile.user)
-                        buy_profile.earning -= order.price
+                        buy_profile.earning -= buy_order.price*quantity
                         buy_profile.save()
 
                         order.status = 2
                     order.save()
 
-                    profile.dollar -= price
-                    profile.btc -= quantity
+                    profile.dollar += price*quantity
+                    profile.btc += quantity
                     profile.save()
 
                 else:
@@ -125,17 +124,20 @@ def new_order(request):
                         sell_order.status = 2
                         sell_order.save()
 
-                        total_earning = round((order.price * quantity) - (sell_order.price * quantity), 2)
-                        profile.earning -= order.price
+                        print(f' {profile.earning} {order.price*quantity}')
+                        profile.earning -= order.price*quantity
+                        print(profile.earning)
                         sell_profile = get_object_or_404(Profile, user=sell_order.profile.user)
-                        sell_profile.earning += total_earning
+                        print(f' {sell_profile.earning} {sell_order.price*quantity}')
+                        sell_profile.earning += sell_order.price*quantity
+                        print(sell_profile.earning)
                         sell_profile.save()
 
                         order.status = 2
                     order.save()
 
-                    profile.dollar += price
-                    profile.btc += quantity
+                    profile.dollar -= price*quantity
+                    profile.btc -= quantity
                     profile.save()
 
                 return redirect('home')
@@ -183,15 +185,13 @@ def get_active_orders(request):
 @login_required(login_url='/login/')
 def get_earnings(request):
     earnings = []
-    orders_per_user = Order.objects.filter(status=2).values('profile__user__username') \
-        .annotate(total_earning=Sum('profile__earning'))
+    profiles = Profile.objects.all().order_by('-earning')
     n = 1
-    for user in orders_per_user:
-        print(user["total_earning"])
+    for profile in profiles:
         json_user_earning = {
             '#': n,
-            'user': user['profile__user__username'],
-            'total_earning': f'${user["total_earning"]}'
+            'user': profile.user.username,
+            'total_earning': f'${profile.earning}'
         }
         n += 1
         earnings.append(json_user_earning)
