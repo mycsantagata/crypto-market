@@ -80,15 +80,16 @@ def new_order(request):
         if form.is_valid():
             quantity = form.cleaned_data['quantity']
             price = form.cleaned_data['price']
-            if 0 < quantity <= profile.btc and 0 < price <= profile.dollar:
-                type_order = form.cleaned_data['type']
-                order = Order()
-                order.profile = profile
-                order.type = type_order
-                order.quantity = quantity
-                order.price = price
 
-                if type_order == 2:
+            type_order = form.cleaned_data['type']
+            order = Order()
+            order.profile = profile
+            order.type = type_order
+            order.quantity = quantity
+            order.price = price
+
+            if type_order == 2:
+                if 0 < quantity <= profile.btc:
                     buy_order = Order.objects.filter(type=1, price__gte=price, quantity=quantity, status=1) \
                         .order_by('-datetime') \
                         .order_by('price') \
@@ -111,8 +112,13 @@ def new_order(request):
                     profile.dollar += price*quantity
                     profile.btc += quantity
                     profile.save()
-
                 else:
+                    messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
+                                              'a value less than 1')
+                    return redirect('new_order')
+
+            else:
+                if 0 < price <= profile.dollar:
                     sell_order = Order.objects.filter(type=2, price__lt=price, quantity=quantity, status=1) \
                         .order_by('-datetime') \
                         .order_by('price') \
@@ -139,12 +145,13 @@ def new_order(request):
                     profile.dollar -= price*quantity
                     profile.btc -= quantity
                     profile.save()
-
+                else:
+                    messages.success(request, 'Invalid value! You do not have enough Dollars or you have entered '
+                                              'a value less than 1')
+                    return redirect('new_order')
                 return redirect('home')
-            else:
-                messages.success(request, 'Invalid value! You do not have enough BTC/Dollars or you have entered '
-                                          'a value less than 1')
-                return redirect('new_order')
+
+
     else:
         form = OrderForm()
         return render(request, 'app/new_order.html', {'form': form,
