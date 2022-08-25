@@ -118,7 +118,7 @@ def new_order(request):
                     return redirect('new_order')
 
             else:
-                if 0 < price <= profile.dollar:
+                if 0 < price*quantity <= profile.dollar:
                     sell_order = Order.objects.filter(type=2, price__lt=price, quantity=quantity, status=1) \
                         .order_by('-datetime') \
                         .order_by('price') \
