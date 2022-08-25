@@ -10,6 +10,8 @@ class Profile(models.Model):
     _id = ObjectIdField()
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     btc = models.IntegerField(default=random.randint(1, 10), null=True)
+    dollar = models.IntegerField(default=10000, null=True)
+    earning = models.FloatField(default=0)
 
 
 class Order(models.Model):
@@ -20,4 +22,3 @@ class Order(models.Model):
     price = models.FloatField(null=True)
     quantity = models.FloatField(null=True)
     status = models.IntegerField(choices=STATUS_TYPE, null=True)
-    earning = models.FloatField(null=True)

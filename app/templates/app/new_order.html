@@ -8,7 +8,9 @@
 
 <h3>New Order</h3>
 <br/>
-<p style="font-weight:bold">You have: {{ quantity }} BTC</p>
+<p style="font-weight:bold">BTC Wallet: {{ quantity_btc }} BTC</p>
+<p style="font-weight:bold">Dollar Wallet: ${{ quantity_dollar }}</p>
+
 <br/>
 
 <form action="{% url 'new_order'%}" method="POST">

@@ -80,7 +80,7 @@ def new_order(request):
         if form.is_valid():
             quantity = form.cleaned_data['quantity']
             price = form.cleaned_data['price']
-            if 0 < quantity <= profile.btc and price > 0:
+            if 0 < quantity <= profile.btc and 0 < price <= profile.dollar:
                 type_order = form.cleaned_data['type']
                 order = Order()
                 order.profile = profile
@@ -97,14 +97,19 @@ def new_order(request):
                     if buy_order is None:
                         order.status = 1
                     else:
-                        total_earning = round((buy_order.price*quantity) - (order.price*quantity), 2)
                         buy_order.status = 2
-                        buy_order.earning = -buy_order.price
                         buy_order.save()
-                        order.earning = total_earning
+
+                        total_earning = round((buy_order.price * quantity) - (order.price * quantity), 2)
+                        profile.earning += total_earning
+                        buy_profile = get_object_or_404(Profile, user=buy_order.profile.user)
+                        buy_profile.earning -= order.price
+                        buy_profile.save()
+
                         order.status = 2
                     order.save()
 
+                    profile.dollar -= price
                     profile.btc -= quantity
                     profile.save()
 
@@ -117,27 +122,32 @@ def new_order(request):
                     if sell_order is None:
                         order.status = 1
                     else:
-                        total_earning = round((order.price * quantity) - (sell_order.price * quantity), 2)
                         sell_order.status = 2
-                        sell_order.earning = total_earning
                         sell_order.save()
-                        order.earning = -order.price
+
+                        total_earning = round((order.price * quantity) - (sell_order.price * quantity), 2)
+                        profile.earning -= order.price
+                        sell_profile = get_object_or_404(Profile, user=sell_order.profile.user)
+                        sell_profile.earning += total_earning
+                        sell_profile.save()
+
                         order.status = 2
                     order.save()
 
+                    profile.dollar += price
                     profile.btc += quantity
                     profile.save()
 
                 return redirect('home')
             else:
-                messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
+                messages.success(request, 'Invalid value! You do not have enough BTC/Dollars or you have entered '
                                           'a value less than 1')
                 return redirect('new_order')
     else:
-
         form = OrderForm()
         return render(request, 'app/new_order.html', {'form': form,
-                                                      'quantity': profile.btc})
+                                                      'quantity_btc': f'{profile.btc:,}',
+                                                      'quantity_dollar': f'{profile.dollar:,}'})
 
 
 @login_required(login_url='/login/')
@@ -170,10 +180,11 @@ def get_active_orders(request):
     return render(request, 'app/get_orders.html', {'orders': json_pretty})
 
 
+@login_required(login_url='/login/')
 def get_earnings(request):
     earnings = []
     orders_per_user = Order.objects.filter(status=2).values('profile__user__username') \
-        .annotate(total_earning=Sum('earning'))
+        .annotate(total_earning=Sum('profile__earning'))
     n = 1
     for user in orders_per_user:
         print(user["total_earning"])
