@@ -21,4 +21,5 @@ class Order(models.Model):
     type = models.IntegerField(choices=ORDER_TYPE, null=True)
     price = models.FloatField(null=True)
     quantity = models.FloatField(null=True)
+    fill = models.FloatField(default=0, null=True)
     status = models.IntegerField(choices=STATUS_TYPE, null=True)

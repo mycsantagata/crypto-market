@@ -4,7 +4,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.serializers.json import DjangoJSONEncoder
 from django.shortcuts import render, redirect, get_object_or_404
-from django.db.models import Sum
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from .forms import OrderForm
 from .models import Profile, Order
@@ -87,30 +86,54 @@ def new_order(request):
             order.type = type_order
             order.quantity = quantity
             order.price = price
+            order.fill = quantity
 
             if type_order == 2:
                 if 0 < quantity <= profile.btc:
-                    buy_order = Order.objects.filter(type=1, price__gte=price, quantity=quantity, status=1) \
+                    buy_orders = Order.objects.filter(type=1, status=1) \
                         .order_by('-datetime') \
-                        .order_by('price') \
-                        .first()
+                        .order_by('price')
 
-                    if buy_order is None:
+                    if buy_orders.count() == 0:
                         order.status = 1
                     else:
-                        buy_order.status = 2
-                        buy_order.save()
+                        for buy_order in buy_orders:
+                            if buy_order.price >= order.price:
+                                buy_profile = get_object_or_404(Profile, user=buy_order.profile.user)
+                                if order.fill - buy_order.fill >= 0:
+                                    buy_fill = buy_order.fill
+                                    order.fill -= buy_fill
+                                    buy_order.fill -= buy_fill
 
-                        profile.earning += order.price*quantity
-                        buy_profile = get_object_or_404(Profile, user=buy_order.profile.user)
-                        buy_profile.earning -= buy_order.price*quantity
-                        buy_profile.save()
+                                    profile.earning -= order.price * buy_fill
+                                    buy_profile.earning += buy_order.price * buy_fill
 
-                        order.status = 2
+                                    buy_profile.dollar -= price * buy_fill
+                                    buy_profile.btc += buy_fill
+                                    profile.dollar += price * buy_fill
+                                    profile.btc -= buy_fill
+
+                                elif buy_order.fill - order.fill >= 0:
+                                    sell_fill = order.fill
+                                    buy_order.fill -= sell_fill
+                                    order.fill -= sell_fill
+
+                                    profile.earning -= order.price * sell_fill
+                                    buy_order.earning += buy_order.price * sell_fill
+
+                                    buy_profile.dollar -= price * sell_fill
+                                    buy_profile.btc += sell_fill
+                                    profile.dollar += price * sell_fill
+                                    profile.btc -= sell_fill
+                                if buy_order.fill == 0:
+                                    buy_order.status = 2
+                                buy_profile.save()
+                                buy_order.save()
+                        if order.fill == 0:
+                            order.status = 2
+                        else:
+                            order.status = 1
                     order.save()
-
-                    profile.dollar += price*quantity
-                    profile.btc -= quantity
                     profile.save()
                 else:
                     messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
@@ -118,39 +141,57 @@ def new_order(request):
                     return redirect('new_order')
 
             else:
-                if 0 < price*quantity <= profile.dollar:
-                    sell_order = Order.objects.filter(type=2, price__lt=price, quantity=quantity, status=1) \
+                if 0 < price * quantity <= profile.dollar:
+                    sell_orders = Order.objects.filter(type=2, status=1) \
                         .order_by('-datetime') \
-                        .order_by('price') \
-                        .first()
+                        .order_by('price')
 
-                    if sell_order is None:
+                    if sell_orders.count() == 0:
                         order.status = 1
                     else:
-                        sell_order.status = 2
-                        sell_order.save()
+                        for sell_order in sell_orders:
+                            if order.price >= sell_order.price:
+                                sell_profile = get_object_or_404(Profile, user=sell_order.profile.user)
+                                if order.fill - sell_order.fill >= 0:
+                                    sell_fill = sell_order.fill
+                                    order.fill -= sell_fill
+                                    sell_order.fill -= sell_fill
 
-                        print(f' {profile.earning} {order.price*quantity}')
-                        profile.earning -= order.price*quantity
-                        print(profile.earning)
-                        sell_profile = get_object_or_404(Profile, user=sell_order.profile.user)
-                        print(f' {sell_profile.earning} {sell_order.price*quantity}')
-                        sell_profile.earning += sell_order.price*quantity
-                        print(sell_profile.earning)
-                        sell_profile.save()
+                                    profile.earning -= order.price * sell_fill
+                                    sell_profile.earning += sell_order.price * sell_fill
 
-                        order.status = 2
+                                    sell_profile.dollar += price * sell_fill
+                                    sell_profile.btc -= sell_fill
+                                    profile.dollar -= price * sell_fill
+                                    profile.btc += sell_fill
+
+                                elif sell_order.fill - order.fill >= 0:
+                                    buy_fill = order.fill
+                                    sell_order.fill -= buy_fill
+                                    order.fill -= buy_fill
+
+                                    profile.earning -= order.price * buy_fill
+                                    sell_profile.earning += sell_order.price * buy_fill
+
+                                    sell_profile.dollar += price * buy_fill
+                                    sell_profile.btc -= buy_fill
+                                    profile.dollar -= price * buy_fill
+                                    profile.btc += buy_fill
+                                if sell_order.fill == 0:
+                                    sell_order.status = 2
+                                sell_order.save()
+                                sell_profile.save()
+                        if order.fill == 0:
+                            order.status = 2
+                        else:
+                            order.status = 1
                     order.save()
-
-                    profile.dollar -= price*quantity
-                    profile.btc += quantity
                     profile.save()
                 else:
                     messages.success(request, 'Invalid value! You do not have enough Dollars or you have entered '
                                               'a value less than 1')
                     return redirect('new_order')
             return redirect('home')
-
 
     else:
         form = OrderForm()
@@ -168,7 +209,8 @@ def get_active_orders(request):
     for order in orders:
         if order.type == 1:
             buy_json = {
-                'quantity': order.quantity,
+                'start_quantity': order.quantity,
+                'residual_quantity': order.fill,
                 'price': order.price,
                 'datetime': order.datetime,
                 'profile': order.profile.user.username
@@ -176,7 +218,8 @@ def get_active_orders(request):
             buy.append(buy_json)
         else:
             sell_json = {
-                'quantity': order.quantity,
+                'start_quantity': order.quantity,
+                'residual_quantity': order.fill,
                 'price': order.price,
                 'datetime': order.datetime,
                 'profile': order.profile.user.username
