@@ -13,20 +13,22 @@ def check_login(request):
     if request.method == "POST":
         formFields = AuthenticationForm(data=request.POST)
         if formFields.is_valid():
-            username = formFields.cleaned_data['username']
-            password = formFields.cleaned_data['password']
+            username = formFields.cleaned_data["username"]
+            password = formFields.cleaned_data["password"]
             chk_user = authenticate(request, username=username, password=password)
             login(request, chk_user)
-            return redirect('home')
+            return redirect("home")
         else:
             logout(request)
             formFields = AuthenticationForm()
-            messages.success(request, "Username or password is incorrect, please try again.")
-            return render(request, 'app/login.html', {'form': formFields})
+            messages.success(
+                request, "Username or password is incorrect, please try again."
+            )
+            return render(request, "app/login.html", {"form": formFields})
     else:
         logout(request)
         formFields = AuthenticationForm()
-        return render(request, 'app/login.html', {'form': formFields})
+        return render(request, "app/login.html", {"form": formFields})
 
 
 def sign_up(request):
@@ -40,23 +42,25 @@ def sign_up(request):
             profile.user = new_user
             profile.save()
 
-            username = formFields.cleaned_data.get('username')
-            password = formFields.cleaned_data.get('password1')
+            username = formFields.cleaned_data.get("username")
+            password = formFields.cleaned_data.get("password1")
             user = authenticate(username=username, password=password)
             login(request, user)
-            return redirect('check_login')
+            return redirect("check_login")
         else:
             for field, errors in formFields.errors.items():
-                messages.success(request, 'Field: {} Errors: {}'.format(field, errors.as_data()))
+                messages.success(
+                    request, "Field: {} Errors: {}".format(field, errors.as_data())
+                )
 
             formFields = UserCreationForm()
-            return render(request, 'app/sign_up.html', {'form': formFields})
+            return render(request, "app/sign_up.html", {"form": formFields})
     else:
         form = UserCreationForm()
-        return render(request, 'app/sign_up.html', {'form': form})
+        return render(request, "app/sign_up.html", {"form": form})
 
 
-@login_required(login_url='/login/')
+@login_required(login_url="/login/")
 def home(request):
     chk_auth = False
 
@@ -64,12 +68,14 @@ def home(request):
         chk_auth = True
         user = request.user
         profile = get_object_or_404(Profile, user__username=user.username)
-        return render(request, 'app/home.html', {'profile': profile, 'chk_auth': chk_auth})
+        return render(
+            request, "app/home.html", {"profile": profile, "chk_auth": chk_auth}
+        )
     else:
-        return render(request, 'app/home.html', {'chk_auth': chk_auth})
+        return render(request, "app/home.html", {"chk_auth": chk_auth})
 
 
-@login_required(login_url='/login/')
+@login_required(login_url="/login/")
 def new_order(request):
     user = request.user
     profile = get_object_or_404(Profile, user__username=user.username)
@@ -77,10 +83,10 @@ def new_order(request):
     if request.method == "POST":
         form = OrderForm(request.POST)
         if form.is_valid():
-            quantity = form.cleaned_data['quantity']
-            price = form.cleaned_data['price']
+            quantity = form.cleaned_data["quantity"]
+            price = form.cleaned_data["price"]
 
-            type_order = form.cleaned_data['type']
+            type_order = form.cleaned_data["type"]
             order = Order()
             order.profile = profile
             order.type = type_order
@@ -89,17 +95,26 @@ def new_order(request):
             order.fill = quantity
 
             if type_order == 2:
-                if 0 < quantity <= profile.btc:
-                    buy_orders = Order.objects.filter(type=1, status=1) \
-                        .order_by('-datetime') \
-                        .order_by('price')
+                chk_orders_btc = Order.objects.filter(profile=profile, status=1, type=2)
+                chk_sum_btc = quantity
+                for chk_order_btc in chk_orders_btc:
+                    chk_sum_btc += chk_order_btc.fill
+
+                if 0 < chk_sum_btc <= profile.btc:
+                    buy_orders = (
+                        Order.objects.filter(type=1, status=1)
+                        .order_by("-datetime")
+                        .order_by("price")
+                    )
 
                     if buy_orders.count() == 0:
                         order.status = 1
                     else:
                         for buy_order in buy_orders:
                             if buy_order.price >= order.price:
-                                buy_profile = get_object_or_404(Profile, user=buy_order.profile.user)
+                                buy_profile = get_object_or_404(
+                                    Profile, user=buy_order.profile.user
+                                )
                                 if order.fill - buy_order.fill >= 0:
                                     buy_fill = buy_order.fill
                                     order.fill -= buy_fill
@@ -119,7 +134,7 @@ def new_order(request):
                                     order.fill -= sell_fill
 
                                     profile.earning -= order.price * sell_fill
-                                    buy_order.earning += buy_order.price * sell_fill
+                                    buy_profile.earning += buy_order.price * sell_fill
 
                                     buy_profile.dollar -= price * sell_fill
                                     buy_profile.btc += sell_fill
@@ -136,22 +151,39 @@ def new_order(request):
                     order.save()
                     profile.save()
                 else:
-                    messages.success(request, 'Invalid value! You do not have enough BTC or you have entered '
-                                              'a value less than 1')
-                    return redirect('new_order')
+                    messages.success(
+                        request,
+                        "Invalid value! Check if:\n"
+                        "- you have entered a value less than 1\n"
+                        "- you have entered a value greater than the BTC held.\n"
+                        "- the sum of BTC entered and the remaining BTC of active "
+                        "orders is greater than the BTC held.",
+                    )
+                    return redirect("new_order")
 
             else:
-                if 0 < price * quantity <= profile.dollar:
-                    sell_orders = Order.objects.filter(type=2, status=1) \
-                        .order_by('-datetime') \
-                        .order_by('price')
+                chk_orders_dollar = Order.objects.filter(
+                    profile=profile, status=1, type=1
+                )
+                chk_sum_dollar = quantity * price
+                for chk_order_dollar in chk_orders_dollar:
+                    chk_sum_dollar += chk_order_dollar.fill * chk_order_dollar.price
+
+                if 0 < chk_sum_dollar <= profile.dollar:
+                    sell_orders = (
+                        Order.objects.filter(type=2, status=1)
+                        .order_by("-datetime")
+                        .order_by("price")
+                    )
 
                     if sell_orders.count() == 0:
                         order.status = 1
                     else:
                         for sell_order in sell_orders:
                             if order.price >= sell_order.price:
-                                sell_profile = get_object_or_404(Profile, user=sell_order.profile.user)
+                                sell_profile = get_object_or_404(
+                                    Profile, user=sell_order.profile.user
+                                )
                                 if order.fill - sell_order.fill >= 0:
                                     sell_fill = sell_order.fill
                                     order.fill -= sell_fill
@@ -188,62 +220,74 @@ def new_order(request):
                     order.save()
                     profile.save()
                 else:
-                    messages.success(request, 'Invalid value! You do not have enough Dollars or you have entered '
-                                              'a value less than 1')
-                    return redirect('new_order')
-            return redirect('home')
+                    messages.success(
+                        request,
+                        "Invalid value! Check if:\n"
+                        "- you have entered a value less than 1\n"
+                        "- you have entered a value greater than the dollars held.\n"
+                        "- the sum of dollars entered and the remaining dollars of active "
+                        "orders is greater than the dollars held.",
+                    )
+                    return redirect("new_order")
+            return redirect("home")
 
     else:
         form = OrderForm()
-        return render(request, 'app/new_order.html', {'form': form,
-                                                      'quantity_btc': f'{profile.btc:,}',
-                                                      'quantity_dollar': f'{profile.dollar:,}'})
+        return render(
+            request,
+            "app/new_order.html",
+            {
+                "form": form,
+                "quantity_btc": f"{profile.btc:,}",
+                "quantity_dollar": f"{profile.dollar:,}",
+            },
+        )
 
 
-@login_required(login_url='/login/')
+@login_required(login_url="/login/")
 def get_active_orders(request):
-    orders = Order.objects.filter(status=1).order_by('-datetime')
+    orders = Order.objects.filter(status=1).order_by("-datetime")
     json_order = {}
     buy = []
     sell = []
     for order in orders:
         if order.type == 1:
             buy_json = {
-                'start_quantity': order.quantity,
-                'residual_quantity': order.fill,
-                'price': order.price,
-                'datetime': order.datetime,
-                'profile': order.profile.user.username
+                "start_quantity": order.quantity,
+                "residual_quantity": order.fill,
+                "price": order.price,
+                "datetime": order.datetime,
+                "profile": order.profile.user.username,
             }
             buy.append(buy_json)
         else:
             sell_json = {
-                'start_quantity': order.quantity,
-                'residual_quantity': order.fill,
-                'price': order.price,
-                'datetime': order.datetime,
-                'profile': order.profile.user.username
+                "start_quantity": order.quantity,
+                "residual_quantity": order.fill,
+                "price": order.price,
+                "datetime": order.datetime,
+                "profile": order.profile.user.username,
             }
             sell.append(sell_json)
 
-    json_order['buy'] = buy
-    json_order['sell'] = sell
+    json_order["buy"] = buy
+    json_order["sell"] = sell
     json_pretty = json.dumps(json_order, cls=DjangoJSONEncoder, indent=4)
-    return render(request, 'app/get_orders.html', {'orders': json_pretty})
+    return render(request, "app/get_orders.html", {"orders": json_pretty})
 
 
-@login_required(login_url='/login/')
+@login_required(login_url="/login/")
 def get_earnings(request):
     earnings = []
-    profiles = Profile.objects.all().order_by('-earning')
+    profiles = Profile.objects.all().order_by("-earning")
     n = 1
     for profile in profiles:
         json_user_earning = {
-            '#': n,
-            'user': profile.user.username,
-            'total_earning': f'${profile.earning}'
+            "#": n,
+            "user": profile.user.username,
+            "total_earning": f"${profile.earning}",
         }
         n += 1
         earnings.append(json_user_earning)
     json_pretty = json.dumps(earnings, indent=4)
-    return render(request, 'app/get_earnings.html', {'earnings': json_pretty})
+    return render(request, "app/get_earnings.html", {"earnings": json_pretty})
