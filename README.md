@@ -1,5 +1,6 @@
 # Crypto market
 This project is built with the Django framework and python 3.7.8, the libraries to be installed are:
++ Django 2.0.0
 + Djongo 1.3.2
 + Pymongo 3.12.1
 
