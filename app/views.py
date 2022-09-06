@@ -104,7 +104,7 @@ def new_order(request):
                     buy_orders = (
                         Order.objects.filter(type=1, status=1)
                         .order_by("-datetime")
-                        .order_by("price")
+                        .order_by("-price")
                     )
 
                     if buy_orders.count() == 0:
